@@ -3,10 +3,50 @@
 > クリティカルセクションは、プログラムが共有リソースに対する排他的アクセスを必要とする場所のことでした
 
 ## sync package
-MutexとRWMutexについて
+### MutexとRWMutexについて
 MutexのLockとRWMutexのRLockの違いを説明してる
 Mutexのロックは読み取り/書き込みどちらの理由だろうと、Lockを取るとそれがクリティカルセクションになる。
 RLockは読み取り専用のLockであり、RLockを実行するgorutineが任意の数あってもクリティカルセクションにはならず、Lockを呼び出すgorutineがあるときにLock/RLockを待機させる。
+
+### Condについて
+CondのWait, Broadcast, Signal, Lock, Unlockについて説明している。
+condはconditionの略っぽい。
+Waitでコンテキストのgorutineが停止する。SignalやBroadcastをgorutineで呼ぶことで一番長くWaitしているgorutineを動作させることができる。
+
+### Poolについて
+生成コストの高いオブジェクトをキャッシュしておき、それを並列化されたgorutineで使い回すことができる。
+PoolにはGetとPutメソッドがあり、Getでキャッシュからオブジェクトを読み込み、Putでキャッシュへオブジェクトを戻せる。
+Poolを扱うときは、次の点に気をつけましょう。
+- sync.Poolをインスタンス化するときは、呼び出されるときにスレッド安全なNewメンバー変数を用意する。
+- Getでインスタンスを取得するとき、受け取るオブジェクトの状態に関して何も想定してはいけない。
+- プールから取り出したオブジェクトの利用が終わったらPutを確実に呼ぶこと。さもなければ、Poolは役に立たない。通常はdeferを使ってこれを行う。
+- プール内のオブジェクトはおよそ均質なものであるべき。
+
+### Channelについて
+並列化されたgorutine間でメモリを同期するためのデータ構造。ch型で表される。
+チャネルへの読み込みと書き込みはブロックされるので、こういうコードがよくある。
+```go
+intCh := make(chan int)
+
+go func(i int) {
+  <-intCh
+  fmt.Println("this gorutine is blocked until other gorutines writes any data to intCh")
+}(i)
+```
+
+チャネルには書き込みと読み込みの型がある。こんな感じ。
+- readは `<-chan int`
+- writeは `chan<- int`
+
+この型を使うことでチャネルの所有権を型で定義することができる。そうすることでより安全な並列処理を書ける。
+
+### selectについて
+
+
+
+### 参考
+- https://dev.to/karanpratapsingh/go-course-sync-package-5c3m
+  - これ、かなり中身が似てる気がする
 
 # Go言語による並行処理読み始め
 https://www.oreilly.co.jp/books/9784873118468/ を読む。いったん1章読んだ。
