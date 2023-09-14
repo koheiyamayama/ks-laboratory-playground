@@ -1,31 +1,46 @@
 package main
 
-import (
-	"fmt"
-	"time"
-)
+import "fmt"
 
 func main() {
-	done := make(chan interface{})
-	go func() {
-		time.Sleep(5 * time.Second)
-		close(done)
-	}()
-
-	workCounter := 0
-loop:
-	for {
-		select {
-		case <-done:
-			fmt.Println("done")
-			break loop
-		default:
-		}
-
-		// Simulate work
-		workCounter++
-		time.Sleep(1 * time.Second)
+	repeat := func(done <-chan interface{}, values ...interface{}) <-chan interface{} {
+		valueStream := make(chan interface{})
+		go func() {
+			defer close(valueStream)
+			for {
+				for _, v := range values {
+					select {
+					case <-done:
+						fmt.Println("finish repeat")
+						return
+					case valueStream <- v:
+					}
+				}
+			}
+		}()
+		return valueStream
 	}
 
-	fmt.Printf("Achieved %v cycles of work before signalled to stop.\n", workCounter)
+	take := func(done <-chan interface{}, valueStream <-chan interface{}, num int) <-chan interface{} {
+		takeStream := make(chan interface{})
+		go func() {
+			defer fmt.Println("finish take")
+			defer close(takeStream)
+			for i := 0; i < num; i++ {
+				select {
+				case <-done:
+					return
+				case takeStream <- <-valueStream:
+				}
+			}
+		}()
+		return takeStream
+	}
+
+	done := make(chan interface{})
+	defer close(done)
+
+	for num := range take(done, repeat(done, 1), 10) {
+		fmt.Printf("%v ", num)
+	}
 }

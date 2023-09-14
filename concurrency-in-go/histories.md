@@ -1,4 +1,85 @@
-# 3章読み途中
+# 5章 大規模開発での並行処理
+## エラー伝播
+
+
+
+# 4章
+## ファンイン・ファンアウト
+> ファンアウトはパイプラインからの入力を扱うために複数のゴルーチンを起動するプロセスを説明する用語です。そしてファンインは複数の結果を1つのチャネルに結合するプロセスを説明する用語です。
+![Fan-out/Fan-inの説明図](image.png)
+
+## パイプライン
+データを受け流す通路のこと。Golangで言えば、Channelがこれに該当する。
+パイプラインを通って渡ってきたデータを処理する場所をステージと呼ぶ。Golangで言えば、関数がこれに該当する。
+repeatで生成された値がvalueStreamに渡されて、渡されるたびにtakeStreamに値が渡されていく。
+```go
+	repeat := func(done <-chan interface{}, values ...interface{}) <-chan interface{} {
+		valueStream := make(chan interface{})
+		go func() {
+			defer close(valueStream)
+			for {
+				for _, v := range values {
+					select {
+					case <-done:
+						return
+					case valueStream <- v:
+					}
+				}
+			}
+		}()
+		return valueStream
+	}
+
+	take := func(done <-chan interface{}, valueStream <-chan interface{}, num int) <-chan interface{} {
+		takeStream := make(chan interface{})
+		go func() {
+			defer close(takeStream)
+			for i := 0; i < num; i++ {
+				select {
+				case <-done:
+					return
+				case takeStream <- <-valueStream:
+				}
+			}
+		}()
+		return takeStream
+	}
+
+	done := make(chan interface{})
+	defer close(done)
+
+	for num := range take(done, repeat(done, 1), 10) {
+		fmt.Printf("%v ", num)
+	}
+```
+
+## 拘束
+> 拘束は、情報をたった1つの並行プロセスからのみ得られることを確実にしてくれる単純ですが強力な考え方です。これが確実に行われたときには、並行プログラムは暗黙的に安全で、また同期がまったく必要なくなります。拘束は2種類存在しています。アドホックとレキシカルの2つです。
+
+アドホックはチーム内の暗黙的なルールによってデータを一つの並列スレッドで扱うことを守る思想。これは簡単に破られるので、著者はレキシカルを推している。
+レキシカルはコンパイラに守らせるやりかた。レキシカルスコープをうまく使ってチャネルへの読み込みと書き込み、データの読み込みと書き込みを分離する。
+```go
+printData := func(wg *sync.WaitGroup, data []byte) {
+    defer wg.Done()
+
+    var buff bytes.Buffer
+    for _, b := range data {
+        fmt.Fprintf(&buff, "%c", b)
+    }
+    fmt.Println(buff.String())
+}
+
+var wg sync.WaitGroup
+wg.Add(2)
+// dataを引数として渡すことで複数gorutineで間違ったデータにアクセスしないようになっている
+data := []byte("golang")
+go printData(&wg, data[:3])     // ❶
+go printData(&wg, data[3:])     // ❷
+
+wg.Wait()
+```
+
+# 3章
 クリティカルセクションとは
 > クリティカルセクションは、プログラムが共有リソースに対する排他的アクセスを必要とする場所のことでした
 
@@ -41,7 +122,7 @@ go func(i int) {
 この型を使うことでチャネルの所有権を型で定義することができる。そうすることでより安全な並列処理を書ける。
 
 ### selectについて
-
+指定された1つ以上のチャネルを均一に処理するための文
 
 
 ### 参考
